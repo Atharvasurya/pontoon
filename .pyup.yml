@@ -10,3 +10,4 @@ requirements:
       update: security
   - docs/requirements.txt:
       update: security
+      update: security
