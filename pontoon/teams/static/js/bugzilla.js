@@ -36,7 +36,7 @@ var Pontoon = (function (my) {
               });
 
               var tbody = $('<tbody>'),
-                formatter = new Intl.DateTimeFormat('en-GB', {
+                formatter = new Intl.DateTimeFormat('en-US', {
                   day: 'numeric',
                   month: 'long',
                   year: 'numeric',
@@ -92,7 +92,8 @@ var Pontoon = (function (my) {
                   '</thead>',
               }).append(tbody);
 
-              container.append(table.show());
+              container.append(table);
+              table.show();
 
               var count = data.bugs.length;
               countCallback(tab, count);

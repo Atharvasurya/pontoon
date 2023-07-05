@@ -5,8 +5,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Author } from '~/api/filter';
 import type { Tag } from '~/api/project';
 import type { Location } from '~/context/Location';
-import { Stats, useStats } from '~/core/stats';
-import { asLocaleString, useOnDiscard } from '~/core/utils';
+import { Stats, useStats } from '~/modules/stats';
+import { asLocaleString, useOnDiscard } from '~/utils';
 
 import { FILTERS_EXTRA, FILTERS_STATUS } from '../constants';
 import './FiltersPanel.css';
@@ -61,7 +61,7 @@ const StatusFilter = ({
   onToggle: () => void;
   selected: boolean;
   stats: Stats;
-  status: typeof FILTERS_STATUS[number];
+  status: (typeof FILTERS_STATUS)[number];
 }) => (
   <li
     className={classNames(
@@ -118,7 +118,7 @@ const ExtraFilter = ({
   onToggle,
   selected,
 }: {
-  extra: typeof FILTERS_EXTRA[number];
+  extra: (typeof FILTERS_EXTRA)[number];
   onSelect: () => void;
   onToggle: () => void;
   selected: boolean;

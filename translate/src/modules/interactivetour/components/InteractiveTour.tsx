@@ -4,8 +4,8 @@ import Tour, { ReactourStep } from 'reactour';
 
 import { updateTourStatus } from '~/api/user';
 import { Locale } from '~/context/Locale';
-import { useProject } from '~/core/project';
-import { USER } from '~/core/user';
+import { useProject } from '~/modules/project';
+import { USER } from '~/modules/user';
 import { useAppSelector } from '~/hooks';
 import { useTranslator } from '~/hooks/useTranslator';
 
@@ -68,7 +68,7 @@ export function InteractiveTour(): React.ReactElement | null {
           </Localized>
           <Localized id='interactivetour-InteractiveTour--main-toolbar-footer'>
             <p>
-              On the right hand side, logged in users can access notifications
+              On the right hand side, logged-in users can access notifications
               and settings.
             </p>
           </Localized>

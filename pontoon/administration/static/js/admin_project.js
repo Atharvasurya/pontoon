@@ -80,18 +80,18 @@ $(function () {
 
     $.ajax({
       url: '/admin/projects/' + $('#id_slug').val() + '/sync/',
-    })
-      .success(function () {
+      success: function () {
         button.html('Started');
-      })
-      .error(function () {
+      },
+      error: function () {
         button.html('Whoops!');
-      })
-      .complete(function () {
+      },
+      complete: function () {
         setTimeout(function () {
           button.removeClass('in-progress').html(title);
         }, 2000);
-      });
+      },
+    });
   });
 
   // Manually Pretranslate project
@@ -109,18 +109,18 @@ $(function () {
 
     $.ajax({
       url: '/admin/projects/' + $('#id_slug').val() + '/pretranslate/',
-    })
-      .success(function () {
+      success: function () {
         button.html('Started');
-      })
-      .error(function () {
+      },
+      error: function () {
         button.html('Whoops!');
-      })
-      .complete(function () {
+      },
+      complete: function () {
         setTimeout(function () {
           button.removeClass('in-progress').html(title);
         }, 2000);
-      });
+      },
+    });
   });
 
   // Suggest slugified name for new projects
@@ -220,7 +220,7 @@ $(function () {
     $(this).parents('.repository').find('.website-wrapper input').val(val);
   });
 
-  // Delete inline form item (e.g. subpage or external resource)
+  // Delete inline form item (e.g. external resource)
   $('body').on('click.pontoon', '.delete-inline', function (e) {
     e.preventDefault();
     $(this).parent().toggleClass('delete');
@@ -228,9 +228,8 @@ $(function () {
   });
   $('.inline [checked]').click().prev().click();
 
-  // Add inline form item (e.g. subpage or external resource)
+  // Add inline form item (e.g. external resource)
   var count = {
-    subpage: $('.subpage:last').data('count'),
     externalresource: $('.externalresource:last').data('count'),
     entity: $('.entity:last').data('count'),
     tag: $('.tag:last').data('count'),

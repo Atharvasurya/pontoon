@@ -24,9 +24,13 @@
         <td>https://redux.js.org/</td>
     </tr>
     <tr>
-        <td>Tests</td>
+        <td rowspan=2>Tests</td>
         <td>Jest</td>
         <td>http://jestjs.io/</td>
+    </tr>
+    <tr>
+        <td>Testing Library</td>
+        <td>https://testing-library.com/docs/react-testing-library/intro/</td>
     </tr>
     <tr>
         <td>Type checking</td>
@@ -53,11 +57,9 @@
 
 `src/context/` contains components and hooks for React Context -based commonly accessible features/modules/data stores.
 
-`src/core/` contains features that are shared in the application, in the form of modules. There should be as little code as possible in this folder.
+`src/modules/` contains front-end features, in the form of modules.
 
-`src/modules/` contains the self-contained features of the application, separated in modules.
-
-`src/rootReducer.js` creates the main reducer to be used with Redux. When adding a new module with a reducer, make sure to include that reducer to `rootReducer`.
+`src/rootReducer.ts` creates the main reducer to be used with Redux. When adding a new module with a reducer, make sure to include that reducer to `rootReducer`.
 
 ### Modules
 
@@ -146,7 +148,13 @@ To check for TypeScript errors locally, run:
 
 ## Testing
 
-Tests are run using [`jest`](https://facebook.github.io/jest/). We use [`enzyme`](http://airbnb.io/enzyme/docs/api/) for mounting React components and [`sinon`](http://sinonjs.org/) for mocking.
+Tests are run using [Jest] and [Sinon] for mocking.
+We are currently migrating our React tests to the [React Testing Library] from [Enzyme].
+
+[jest]: https://facebook.github.io/jest/
+[sinon]: http://sinonjs.org/
+[react testing library]: https://testing-library.com/docs/react-testing-library/intro/
+[enzyme]: http://airbnb.io/enzyme/docs/api/
 
 To run the test suite, use:
 

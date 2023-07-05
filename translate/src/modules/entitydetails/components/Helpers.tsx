@@ -5,8 +5,8 @@ import { Tab, TabList, TabPanel, Tabs } from 'react-tabs';
 import type { Entity } from '~/api/entity';
 import { HelperSelection } from '~/context/HelperSelection';
 import type { Location } from '~/context/Location';
-import type { TermState } from '~/core/term';
-import type { UserState } from '~/core/user';
+import type { TermState } from '~/modules/terms';
+import type { UserState } from '~/modules/user';
 import { Machinery, MachineryCount } from '~/modules/machinery';
 import type { LocalesState } from '~/modules/otherlocales';
 import { OtherLocales, OtherLocalesCount } from '~/modules/otherlocales';
@@ -18,7 +18,6 @@ import './Helpers.css';
 
 type Props = {
   entity: Entity;
-  isReadOnlyEditor: boolean;
   otherlocales: LocalesState;
   teamComments: TeamCommentState;
   terms: TermState;
@@ -40,7 +39,6 @@ type Props = {
  */
 export function Helpers({
   entity,
-  isReadOnlyEditor,
   otherlocales,
   teamComments,
   terms,
@@ -83,11 +81,7 @@ export function Helpers({
           </TabList>
           {isTerminologyProject ? null : (
             <TabPanel>
-              <Terms
-                isReadOnlyEditor={isReadOnlyEditor}
-                terms={terms}
-                navigateToPath={navigateToPath}
-              />
+              <Terms terms={terms} navigateToPath={navigateToPath} />
             </TabPanel>
           )}
           <TabPanel>

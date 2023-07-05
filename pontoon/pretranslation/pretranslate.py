@@ -1,63 +1,106 @@
-from functools import reduce
+import logging
 import operator
+import re
 
 from django.db.models import CharField, Value as V
 from django.db.models.functions import Concat
+
+from fluent.syntax import FluentParser, FluentSerializer
+from functools import reduce
 
 from pontoon.base.models import User, TranslatedResource
 from pontoon.machinery.utils import (
     get_google_translate_data,
     get_translation_memory_data,
 )
+from pontoon.pretranslation import AUTHORS
+from .transformer import ApplyPretranslation
 
 
-def get_translations(entity, locale):
+log = logging.getLogger(__name__)
+
+parser = FluentParser()
+serializer = FluentSerializer()
+
+
+def get_pretranslations(entity, locale, preserve_placeables=False):
     """
-    Get pretranslations for the entity-locale pair
+    Get pretranslations for the entity-locale pair using internal translation memory and
+    Google's machine translation.
+
+    For Fluent strings, uplift SelectExpressions, serialize Placeables as TextElements
+    and then only pretranslate TextElements. Set the most frequent TextElement
+    pretranslation author as the author of the entire pretranslation.
 
     :arg Entity entity: the Entity object
     :arg Locale locale: the Locale object
+    :arg boolean preserve_placeables
 
-    :returns: a list of tuple with:
+    :returns: a list of tuples, consisting of:
         - a pretranslation of the entity
-        - plural form
-        - user - tm_user/gt_user
+        - a plural form
+        - a user (representing TM or GT service)
     """
-    tm_user = User.objects.get(email="pontoon-tm@example.com")
-    gt_user = User.objects.get(email="pontoon-gt@example.com")
+    source = entity.string
+    services = {k: User.objects.get(email=email) for k, email in AUTHORS.items()}
 
-    strings = []
-    plural_forms = range(0, locale.nplurals or 1)
-
-    # Try to get matches from translation_memory
-    tm_response = get_translation_memory_data(
-        text=entity.string,
-        locale=locale,
-    )
-
-    tm_response = [t for t in tm_response if int(t["quality"]) == 100]
-
-    if tm_response:
-        if entity.string_plural == "":
-            strings = [(tm_response[0]["target"], None, tm_user)]
-        else:
-            for plural_form in plural_forms:
-                strings.append((tm_response[0]["target"], plural_form, tm_user))
-
-    # Else fetch from google translate
-    elif locale.google_translate_code:
-        gt_response = get_google_translate_data(
-            text=entity.string,
-            locale_code=locale.google_translate_code,
+    if entity.resource.format == "ftl":
+        entry = parser.parse_entry(source)
+        pretranslate = ApplyPretranslation(
+            locale, entry, get_pretranslated_data, preserve_placeables
         )
 
+        try:
+            pretranslate.visit(entry)
+        except ValueError as e:
+            log.info(f"Fluent pretranslation error: {e}")
+            return []
+
+        pretranslation = serializer.serialize_entry(entry)
+
+        authors = [services[service] for service in pretranslate.services]
+        author = max(set(authors), key=authors.count) if authors else services["tm"]
+
+        return [(pretranslation, None, author)]
+
+    else:
+        pretranslation, service = get_pretranslated_data(
+            source, locale, preserve_placeables
+        )
+
+        if pretranslation is None:
+            return []
+
+        author = services[service]
+        if entity.string_plural == "":
+            return [(pretranslation, None, author)]
+        else:
+            plural_forms = range(0, locale.nplurals or 1)
+            return [
+                (pretranslation, plural_form, author) for plural_form in plural_forms
+            ]
+
+
+def get_pretranslated_data(source, locale, preserve_placeables):
+    # Empty strings do not need translation
+    if re.search("^\\s*$", source):
+        return source, "tm"
+
+    # Try to get matches from Translation Memory
+    tm_response = get_translation_memory_data(text=source, locale=locale)
+    tm_perfect = [t for t in tm_response if int(t["quality"]) == 100]
+    if tm_perfect:
+        return tm_perfect[0]["target"], "tm"
+
+    # Fetch from Google Translate
+    elif locale.google_translate_code:
+        gt_response = get_google_translate_data(
+            text=source, locale=locale, preserve_placeables=preserve_placeables
+        )
         if gt_response["status"]:
-            if entity.string_plural == "":
-                strings = [(gt_response["translation"], None, gt_user)]
-            else:
-                for plural_form in plural_forms:
-                    strings.append((gt_response["translation"], plural_form, gt_user))
-    return strings
+            return gt_response["translation"], "gt"
+
+    return None, None
 
 
 def update_changed_instances(tr_filter, tr_dict, translations):

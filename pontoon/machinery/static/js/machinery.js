@@ -133,11 +133,9 @@ $(function () {
       var listitems = ul.children('li'),
         sourceMap = {
           'Translation memory': 1,
-          Mozilla: 2,
-          Microsoft: 3,
-          'Systran Translate': 4,
-          'Google Translate': 5,
-          'Microsoft Translator': 6,
+          'Google Translate': 2,
+          'Systran Translate': 3,
+          'Microsoft Translator': 4,
         };
 
       function getTranslationSource(el) {
@@ -254,8 +252,7 @@ $(function () {
         text: original,
         locale: self.locale.code,
       },
-    })
-      .success(function (data) {
+      success: function (data) {
         if (data) {
           $.each(data, function () {
             append({
@@ -269,9 +266,10 @@ $(function () {
             });
           });
         }
-      })
-      .error(error)
-      .complete(complete);
+      },
+      error: error,
+      complete: complete,
+    });
 
     // Google Translate
     if (
@@ -290,8 +288,7 @@ $(function () {
           text: original,
           locale: self.locale.google_translate_code,
         },
-      })
-        .success(function (data) {
+        success: function (data) {
           if (data.translation) {
             append({
               url: 'https://translate.google.com/',
@@ -301,9 +298,10 @@ $(function () {
               translation: data.translation,
             });
           }
-        })
-        .error(error)
-        .complete(complete);
+        },
+        error: error,
+        complete: complete,
+      });
     }
 
     // Microsoft Translator
@@ -323,8 +321,7 @@ $(function () {
           text: original,
           locale: self.locale.ms_translator_code,
         },
-      })
-        .success(function (data) {
+        success: function (data) {
           if (data.translation) {
             append({
               url: 'https://www.bing.com/translator',
@@ -334,9 +331,10 @@ $(function () {
               translation: data.translation,
             });
           }
-        })
-        .error(error)
-        .complete(complete);
+        },
+        error: error,
+        complete: complete,
+      });
     }
 
     // Systran Translate
@@ -356,8 +354,7 @@ $(function () {
           text: original,
           locale: self.locale.systran_translate_code,
         },
-      })
-        .success(function (data) {
+        success: function (data) {
           if (data.translation) {
             append({
               url: 'https://translate.systran.net/translationTools',
@@ -367,48 +364,10 @@ $(function () {
               translation: data.translation,
             });
           }
-        })
-        .error(error)
-        .complete(complete);
-    }
-
-    // Microsoft Terminology
-    if (self.locale.ms_terminology_code.length) {
-      requests++;
-
-      if (self.XHRmicrosoftTerminology) {
-        self.XHRmicrosoftTerminology.abort();
-      }
-
-      self.XHRmicrosoftTerminology = $.ajax({
-        url: '/microsoft-terminology/',
-        data: {
-          text: original,
-          locale: self.locale.ms_terminology_code,
         },
-      })
-        .success(function (data) {
-          if (data.translations) {
-            $.each(data.translations, function () {
-              append({
-                original: this.source,
-                quality: Math.round(this.quality) + '%',
-                url:
-                  'https://www.microsoft.com/Language/en-US/Search.aspx?sString=' +
-                  this.source +
-                  '&langID=' +
-                  self.locale.ms_terminology_code,
-                title:
-                  'Visit Microsoft Terminology Service API.\n' +
-                  '© 2018 Microsoft Corporation. All rights reserved.',
-                source: 'Microsoft',
-                translation: this.target,
-              });
-            });
-          }
-        })
-        .error(error)
-        .complete(complete);
+        error: error,
+        complete: complete,
+      });
     }
 
     self.NProgressBind();

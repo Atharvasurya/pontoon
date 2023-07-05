@@ -34,14 +34,14 @@ from pontoon.actionlog.utils import log_action
 from pontoon.base import forms
 from pontoon.base import utils
 from pontoon.base.models import (
+    Comment,
     Entity,
     Locale,
     Project,
     ProjectLocale,
-    TranslationMemoryEntry,
     TranslatedResource,
     Translation,
-    Comment,
+    TranslationMemoryEntry,
 )
 from pontoon.base.templatetags.helpers import provider_login_url
 from pontoon.checks.libraries import run_checks
@@ -256,6 +256,9 @@ def entities(request):
         "extra",
         "time",
         "author",
+        "review_time",
+        "reviewer",
+        "exclude_self_reviewed",
         "tag",
     )
     form_data = {
@@ -424,7 +427,7 @@ def get_translation_history(request):
                 "date": t.date.strftime("%b %d, %Y %H:%M"),
                 "date_iso": t.date.isoformat(),
                 "approved_user": User.display_name_or_blank(t.approved_user),
-                "unapproved_user": User.display_name_or_blank(t.unapproved_user),
+                "rejected_user": User.display_name_or_blank(t.rejected_user),
                 "comments": [c.serialize() for c in t.comments.order_by("timestamp")],
                 "machinery_sources": t.machinery_sources_values,
             }
@@ -679,7 +682,7 @@ def get_users(request):
     users = (
         User.objects
         # Exclude system users
-        .exclude(email__regex=r"^pontoon-(\w+)@example.com$")
+        .exclude(profile__system_user=True)
         # Exclude deleted users
         .exclude(email__regex=r"^deleted-user-(\w+)@example.com$")
     )

@@ -5,8 +5,8 @@ import React, { useCallback, useContext, useState } from 'react';
 import type { Entity as EntityType } from '~/api/entity';
 import { Locale } from '~/context/Locale';
 import type { Location } from '~/context/Location';
-import { useTranslationStatus } from '~/core/entities/useTranslationStatus';
-import { TranslationProxy } from '~/core/translation';
+import { useTranslationStatus } from '~/modules/entities/useTranslationStatus';
+import { Translation } from '~/modules/translation';
 import { useTranslator } from '~/hooks/useTranslator';
 
 import './Entity.css';
@@ -128,7 +128,7 @@ export function Entity({
       ) : null}
       <div>
         <p className='source-string'>
-          <TranslationProxy
+          <Translation
             content={entity.original}
             format={entity.format}
             search={parameters.search}
@@ -140,8 +140,8 @@ export function Entity({
           lang={code}
           data-script={script}
         >
-          <TranslationProxy
-            content={entity.translation[0].string}
+          <Translation
+            content={entity.translation[0].string ?? ''}
             format={entity.format}
             search={parameters.search}
           />

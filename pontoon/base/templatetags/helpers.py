@@ -7,8 +7,6 @@ from allauth.socialaccount import providers
 from allauth.utils import get_request_param
 from bleach.linkifier import Linker
 from django_jinja import library
-from fluent.syntax import FluentParser, FluentSerializer, ast
-from fluent.syntax.serializer import serialize_expression
 
 from django import template
 from django.conf import settings
@@ -18,10 +16,9 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from pontoon.base.fluent import get_simple_preview
 
 register = template.Library()
-parser = FluentParser()
-serializer = FluentSerializer()
 
 
 @library.global_function
@@ -103,20 +100,6 @@ def comma_or_prefix(source):
 
 
 @library.filter
-def display_permissions(self):
-    output = "Can make suggestions"
-
-    if self.translated_locales:
-        if self.is_superuser:
-            locales = "all locales"
-        else:
-            locales = ", ".join(self.translated_locales)
-        output = "Can submit and approve translations for " + locales
-
-    return output
-
-
-@library.filter
 def date_status(value, complete):
     """Get date status relative to today."""
     if isinstance(value, datetime.date):
@@ -138,9 +121,9 @@ def format_datetime(value, format="full", default="---"):
         if format == "full":
             format = "%A, %B %d, %Y at %H:%M %Z"
         elif format == "date":
-            format = "%B %d, %Y"
+            format = "%B %-d, %Y"
         elif format == "short_date":
-            format = "%b %d, %Y"
+            format = "%b %-d, %Y"
         elif format == "time":
             format = "%H:%M %Z"
         return value.strftime(format)
@@ -234,50 +217,14 @@ def dict_html_attrs(dict_obj):
     return markupsafe.Markup(" ".join([f'data-{k}="{v}"' for k, v in dict_obj.items()]))
 
 
-def _get_default_variant(variants):
-    """Return default variant from the list of variants."""
-    for variant in variants:
-        if variant.default:
-            return variant
-
-
-def _serialize_value(value):
-    """Serialize AST values into a simple string."""
-    response = ""
-
-    for element in value.elements:
-        if isinstance(element, ast.TextElement):
-            response += element.value
-
-        elif isinstance(element, ast.Placeable):
-            if isinstance(element.expression, ast.SelectExpression):
-                default_variant = _get_default_variant(element.expression.variants)
-                response += _serialize_value(default_variant.value)
-            else:
-                response += "{ " + serialize_expression(element.expression) + " }"
-
-    return response
-
-
 @library.filter
-def as_simple_translation(source):
-    """Transfrom complex FTL-based strings into single-value strings."""
-    translation_ast = parser.parse_entry(source)
+def as_plain_message(source):
+    """
+    Return a plain string representation of a given message.
 
-    # Non-FTL string or string with an error
-    if isinstance(translation_ast, ast.Junk):
-        return source
-
-    # Value: use entire AST
-    if translation_ast.value:
-        tree = translation_ast
-
-    # Attributes (must be present in valid AST if value isn't):
-    # use AST of the first attribute
-    else:
-        tree = translation_ast.attributes[0]
-
-    return _serialize_value(tree.value)
+    Complex FTL strings are transformed into single-value strings.
+    """
+    return get_simple_preview(source)
 
 
 @library.filter

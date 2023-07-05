@@ -4,10 +4,10 @@ import useInfiniteScroll from 'react-infinite-scroll-hook';
 import { MachineryTranslations } from '~/context/MachineryTranslations';
 import { SearchData } from '~/context/SearchData';
 
-import { SkeletonLoader } from '~/core/loaders';
+import { SkeletonLoader } from '~/modules/loaders';
 
 import './Machinery.css';
-import { Translation } from './Translation';
+import { MachineryTranslationComponent } from './MachineryTranslation';
 
 /**
  * Show translations from machines.
@@ -70,7 +70,7 @@ export function Machinery(): React.ReactElement<'section'> {
       <div className='list-wrapper' ref={rootRef}>
         <ul>
           {translations.map((translation, index) => (
-            <Translation
+            <MachineryTranslationComponent
               index={index}
               sourceString={source}
               translation={translation}
@@ -80,7 +80,7 @@ export function Machinery(): React.ReactElement<'section'> {
         </ul>
         <ul>
           {results.map((result, index) => (
-            <Translation
+            <MachineryTranslationComponent
               index={index + translations.length}
               sourceString={query}
               translation={result}

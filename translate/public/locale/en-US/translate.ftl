@@ -111,7 +111,7 @@ comments-CommentsList--all-comments = ALL COMMENTS
 ## Editor Menu
 ## Allows contributors to modify or propose a translation
 
-editor-EditorMenu--sign-in-to-translate = <a>Sign in</a> to translate.
+editor-EditorMenu--sign-in-to-translate = <form>Sign in</form> to translate.
 editor-EditorMenu--read-only-localization = This is a read-only localization.
 editor-EditorMenu--button-copy = COPY
     .title = Copy From Source (Ctrl + Shift + C)
@@ -134,13 +134,13 @@ editor-EditorMenu--button-suggesting = <glyph></glyph>SUGGESTING
 ## Editor Settings
 ## Shows options to update user settings regarding the editor.
 
-editor-EditorSettings--toolkit-checks = <glyph></glyph>Translate Toolkit Checks
+editor-EditorSettings--toolkit-checks = <glyph></glyph>Translate Toolkit checks
     .title = Run Translate Toolkit checks before submitting translations
 
-editor-EditorSettings--force-suggestions = <glyph></glyph>Make Suggestions
+editor-EditorSettings--force-suggestions = <glyph></glyph>Make suggestions
     .title = Save suggestions instead of translations
 
-editor-EditorSettings--change-all = Change All Settings
+editor-EditorSettings--change-all = Change all settings
 
 
 ## Editor FTL Source Editor Switch
@@ -276,20 +276,19 @@ entitydetails-Metadata--context =
 entitydetails-Metadata--placeholder =
     .title = PLACEHOLDER EXAMPLES
 
-entitydetails-Metadata--resource =
-    .title = RESOURCE
-
+entitydetails-Metadata--attribute =
+    .title = FLUENT ATTRIBUTE
 
 ## Entity Details ContextIssueButton
 ## Shows the request context or report issue button
 
 entitydetails-ContextIssueButton--context-issue-button = REQUEST CONTEXT or REPORT ISSUE
 
-## Entity Details GenericOriginalString
-## Shows the original string of an entity
+## Entity Details PluralString
+## Shows the original string of an entity with plural forms
 
-entitydetails-GenericOriginalString--plural = PLURAL
-entitydetails-GenericOriginalString--singular = SINGULAR
+entitydetails-PluralString--plural = PLURAL
+entitydetails-PluralString--singular = SINGULAR
 
 
 ## Entities List Entity
@@ -299,10 +298,10 @@ entitieslist-Entity--sibling-strings-title =
     .title = Click to reveal sibling strings
 
 
-## Rich editor
-## Renders a Rich editor for Fluent string editing
+## Translation Form
 
-fluenteditor-RichTranslationForm--plural-example = { $plural } (e.g. <stress>{ $example }</stress>)
+translationform--label-with-example = { $label } (e.g. <stress>{ $example }</stress>)
+translationform--single-field-placeholder = Type translation and press Enter to save
 
 
 ## History
@@ -359,9 +358,16 @@ history-Translation--button-comments = { $commentCount ->
 history-Translation--span-copied =
     .title = Copied ({ $machinerySources })
 
-history-translation--approved = Approved by { $user }
-history-translation--unapproved = Unapproved by { $user }
-history-translation--unreviewed = Not reviewed yet
+history-translation--approved =
+    .title = Approved by { $user }
+history-translation--approved-anonymous =
+    .title = Approved
+history-translation--rejected =
+    .title = Rejected by { $user }
+history-translation--rejected-anonymous =
+    .title = Rejected
+history-translation--unreviewed =
+    .title = Not reviewed yet
 
 
 ## Interactive Tour
@@ -381,7 +387,7 @@ interactivetour-InteractiveTour--main-toolbar-content =
     see the progress of your current localization and additional
     project information.
 interactivetour-InteractiveTour--main-toolbar-footer =
-    On the right hand side, logged in users can access notifications
+    On the right hand side, logged-in users can access notifications
     and settings.
 
 interactivetour-InteractiveTour--string-list-title = String List
@@ -545,6 +551,7 @@ notification--tt-checks-enabled = Translate Toolkit Checks enabled
 notification--tt-checks-disabled = Translate Toolkit Checks disabled
 notification--make-suggestions-enabled = Make Suggestions enabled
 notification--make-suggestions-disabled = Make Suggestions disabled
+notification--ftl-not-supported-rich-editor = Translation not supported in rich editor
 notification--entity-not-found = Can’t load specified string
 notification--string-link-copied = Link copied to clipboard
 notification--comment-added = Comment added
@@ -573,12 +580,20 @@ placeable-parser-escapeSequence =
     .title = Escape sequence
 placeable-parser-filePattern =
     .title = File location
+placeable-parser-fluentFunction =
+    .title = Fluent function
+placeable-parser-fluentParametrizedTerm =
+    .title = Fluent parametrized term
+placeable-parser-fluentString =
+    .title = Fluent string
 placeable-parser-fluentTerm =
     .title = Fluent term
 placeable-parser-javaFormattingVariable =
     .title = Java Message formatting variable
 placeable-parser-jsonPlaceholder =
     .title = JSON placeholder
+placeable-parser-leadingSpace =
+    .title = Leading space
 placeable-parser-multipleSpaces =
     .title = Multiple spaces
 placeable-parser-narrowNonBreakingSpace =
@@ -595,8 +610,6 @@ placeable-parser-numberString =
     .title = Number
 placeable-parser-optionPattern =
     .title = Command line option
-placeable-parser-fluentParametrizedTerm =
-    .title = Fluent parametrized term
 placeable-parser-punctuation =
     .title = Punctuation
 placeable-parser-pythonFormatNamedString =
@@ -607,10 +620,10 @@ placeable-parser-pythonFormattingVariable =
     .title = Python string formatting variable
 placeable-parser-qtFormatting =
     .title = Qt string formatting variable
-placeable-parser-stringFormattingVariable =
-    .title = String formatting variable
 placeable-parser-shortCapitalNumberString =
     .title = Short capital letter and number string
+placeable-parser-stringFormattingVariable =
+    .title = String formatting variable
 placeable-parser-tabCharacter =
     .title = Tab character
 placeable-parser-thinSpace =
@@ -654,6 +667,7 @@ search-FiltersPanel--heading-extra = EXTRA FILTERS
 search-FiltersPanel--heading-authors = TRANSLATION AUTHORS
 search-FiltersPanel--status-name-all = All
 search-FiltersPanel--status-name-translated = Translated
+search-FiltersPanel--status-name-pretranslated = Pretranslated
 search-FiltersPanel--status-name-warnings = Warnings
 search-FiltersPanel--status-name-errors = Errors
 search-FiltersPanel--status-name-missing = Missing

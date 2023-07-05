@@ -9,7 +9,7 @@
 ## Editor Menu
 ## Allows contributors to modify or propose a translation
 
-editor-EditorMenu--sign-in-to-translate = <a>Connectez-vous</a> pour traduire.
+editor-EditorMenu--sign-in-to-translate = <form>Connectez-vous</form> pour traduire.
 editor-EditorMenu--read-only-localization = Cette traduction est en lecture seule.
 editor-EditorMenu--button-copy = COPIER
 editor-EditorMenu--button-clear = EFFACER
@@ -111,15 +111,12 @@ entitydetails-Metadata--context =
 entitydetails-Metadata--placeholder =
     .title = EXEMPLES BOUCHE-TROUS
 
-entitydetails-Metadata--resource =
-    .title = RESSOURCE
 
+## Entity Details PluralString
+## Shows the original string of an entity with plural forms
 
-## Entity Details GenericOriginalString
-## Shows the original string of an entity
-
-entitydetails-GenericOriginalString--plural = PLURIEL
-entitydetails-GenericOriginalString--singular = SINGULIER
+entitydetails-PluralString--plural = PLURIEL
+entitydetails-PluralString--singular = SINGULIER
 
 
 ## History

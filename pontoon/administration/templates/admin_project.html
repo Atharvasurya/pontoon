@@ -237,7 +237,7 @@
 
   <div class="deadline-priority-contact clearfix">
     <section class="deadline clearfix">
-      <label for="id_deadline">Target Date</label>
+      <label for="id_deadline">Target date</label>
       <input id="id_deadline" name="deadline" value="{{ form.deadline.value() or '' }}" type="text" placeholder="YYYY-MM-DD">
       {{ form.deadline.errors }}
     </section>
@@ -247,7 +247,7 @@
       {{ form.priority.errors }}
     </section>
     <section class="contact clearfix">
-        {{ form.contact.label_tag() }}
+        <label for="id_contact">Project manager</label>
         {{ form.contact }}
         {{ form.contact.errors }}
     </section>
@@ -262,26 +262,6 @@
     <option value="Screenshots">
     <option value="Issue tracking">
   </datalist>
-
-  <h3>In-context localization <span class="small stress">(optional)</span></h3>
-
-  <div class="clearfix">
-      {{ form.url.label_tag() }}
-      {{ form.url }}
-      {{ form.url.errors }}
-  </div>
-  <div class="clearfix">
-      {{ form.width.label_tag() }}
-      {{ form.width }}
-      {{ form.width.errors }}
-  </div>
-  <div class="checkbox clearfix">
-      <label for="id_links">
-          {{ form.links }}{{ form.links.label }}
-      </label>
-  </div>
-
-  {{ inline_formset.render(title='Subpages', type='subpage', formset=subpage_formset) }}
 
   <section class="tags">
     <h3>
@@ -320,7 +300,7 @@
       </div>
     </div>
     <div class="locales-pretranslate clearfix">
-      {{ multiple_team_selector.render(locales_selected, locales_pretranslate) }}
+      {{ multiple_team_selector.render(locales_pretranslate_available, locales_pretranslate) }}
       {{ form.locales_pretranslate }}
       {{ form.locales_pretranslate.errors }}
     </div>
@@ -337,7 +317,7 @@
               {{ form.sync_disabled }}{{ form.sync_disabled.label }}
           </label>
       </div>
-      {% if settings.MANUAL_SYNC %}
+      {% if settings.MANUAL_SYNC and not project.disabled %}
       <button class="sync button">Sync</button>
       {% endif %}
       <button class="button active save">Save project</button>

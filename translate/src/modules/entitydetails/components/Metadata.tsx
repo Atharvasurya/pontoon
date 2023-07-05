@@ -1,36 +1,25 @@
 import { Localized } from '@fluent/react';
 import parse from 'html-react-parser';
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useContext, useLayoutEffect } from 'react';
 // @ts-expect-error Working types are unavailable for react-linkify 0.2.2
 import Linkify from 'react-linkify';
 
 import type { Entity } from '~/api/entity';
-import type { TermType } from '~/api/terminology';
 import { Locale } from '~/context/Locale';
-import type { TermState } from '~/core/term';
-import type { UserState } from '~/core/user';
+import type { TermState } from '~/modules/terms';
+import type { UserState } from '~/modules/user';
+import { OriginalString } from '~/modules/originalstring';
 import type { TeamCommentState } from '~/modules/teamcomments';
 
 import { ContextIssueButton } from './ContextIssueButton';
 import { FluentAttribute } from './FluentAttribute';
-import { OriginalStringProxy } from './OriginalStringProxy';
 import { Property } from './Property';
 import { Screenshots } from './Screenshots';
-import { TermsPopup } from './TermsPopup';
 
 import './Metadata.css';
-import { EditorActions } from '~/context/Editor';
 
 type Props = {
   entity: Entity;
-  isReadOnlyEditor: boolean;
   terms: TermState;
   teamComments: TeamCommentState;
   user: UserState;
@@ -127,14 +116,6 @@ function ResourceComment({ comment }: { comment: string }) {
   );
 }
 
-function EntityContext({ context }: { context: string }) {
-  return (
-    <Datum className='context' id='context' title='CONTEXT'>
-      {context}
-    </Datum>
-  );
-}
-
 function SourceArray({ source }: { source: string[][] }) {
   return source.length > 1 || (source.length === 1 && source[0]) ? (
     <ul>
@@ -172,6 +153,39 @@ function SourceObject({
   );
 }
 
+const EntityContext = ({
+  entity: { context, path, project },
+  localeCode,
+  navigateToPath,
+}: {
+  entity: Entity;
+  localeCode: string;
+  navigateToPath: (path: string) => void;
+}) => (
+  <Localized id='entitydetails-Metadata--context' attrs={{ title: true }}>
+    <Property title='CONTEXT' className='context'>
+      {context ? (
+        <>
+          {context}
+          <span className='divider'>&bull;</span>
+        </>
+      ) : null}
+      <a
+        href={`/${localeCode}/${project.slug}/${path}/`}
+        onClick={(ev) => {
+          ev.preventDefault();
+          navigateToPath(ev.currentTarget.pathname);
+        }}
+        className='resource-path'
+      >
+        {path}
+      </a>
+      <span className='divider'>&bull;</span>
+      <a href={`/${localeCode}/${project.slug}/`}>{project.name}</a>
+    </Property>
+  </Localized>
+);
+
 /**
  * Component showing metadata of an entity.
  *
@@ -188,7 +202,6 @@ function SourceObject({
 export function Metadata({
   commentTabRef,
   entity,
-  isReadOnlyEditor,
   navigateToPath,
   setCommentTabIndex,
   setContactPerson,
@@ -196,51 +209,7 @@ export function Metadata({
   teamComments,
   user,
 }: Props): React.ReactElement {
-  const [popupTerms, setPopupTerms] = useState<TermType[]>([]);
-  const hidePopupTerms = useCallback(() => setPopupTerms([]), []);
   const { code } = useContext(Locale);
-  const { setEditorSelection } = useContext(EditorActions);
-
-  const mounted = useRef(false);
-  useEffect(() => {
-    if (mounted.current) {
-      setPopupTerms([]);
-    } else {
-      mounted.current = true;
-    }
-  }, [entity]);
-
-  const handleClickOnPlaceable = useCallback(
-    ({ target }: React.MouseEvent<HTMLParagraphElement>) => {
-      if (target instanceof HTMLElement) {
-        if (target.classList.contains('placeable')) {
-          if (isReadOnlyEditor) {
-            return;
-          }
-          if (target.dataset['match']) {
-            setEditorSelection(target.dataset['match']);
-          } else if (target.firstChild instanceof Text) {
-            setEditorSelection(target.firstChild.data);
-          }
-        }
-
-        // Handle click on Term
-        const markedTerm = target.dataset['term'];
-        if (markedTerm) {
-          setPopupTerms(terms.terms.filter((t) => t.text === markedTerm));
-        }
-      }
-    },
-    [isReadOnlyEditor, setEditorSelection, terms],
-  );
-
-  const navigateToPath_ = useCallback(
-    (ev: React.MouseEvent<HTMLAnchorElement>) => {
-      ev.preventDefault();
-      navigateToPath(ev.currentTarget.pathname);
-    },
-    [navigateToPath],
-  );
 
   const openTeamComments = useCallback(() => {
     const teamCommentsTab = commentTabRef.current;
@@ -258,43 +227,22 @@ export function Metadata({
         <ContextIssueButton openTeamComments={openTeamComments} />
       )}
       <Screenshots source={entity.comment} locale={code} />
-      <OriginalStringProxy
-        entity={entity}
-        terms={terms}
-        handleClickOnPlaceable={handleClickOnPlaceable}
-      />
-      {popupTerms.length > 0 && (
-        <TermsPopup
-          isReadOnlyEditor={isReadOnlyEditor}
-          terms={popupTerms}
-          hide={hidePopupTerms}
-          navigateToPath={navigateToPath}
-        />
-      )}
+      <OriginalString navigateToPath={navigateToPath} terms={terms} />
       <PinnedComments teamComments={teamComments} />
       <EntityComment comment={entity.comment} />
       <GroupComment comment={entity.group_comment} />
       <ResourceComment comment={entity.resource_comment} key={entity.pk} />
       <FluentAttribute entity={entity} />
-      <EntityContext context={entity.context} />
       {Array.isArray(entity.source) ? (
         <SourceArray source={entity.source} />
       ) : entity.source ? (
         <SourceObject source={entity.source} />
       ) : null}
-      <Localized id='entitydetails-Metadata--resource' attrs={{ title: true }}>
-        <Property title='RESOURCE' className='resource'>
-          <a href={`/${code}/${entity.project.slug}/`}>{entity.project.name}</a>
-          <span className='divider'>&bull;</span>
-          <a
-            href={`/${code}/${entity.project.slug}/${entity.path}/`}
-            onClick={navigateToPath_}
-            className='resource-path'
-          >
-            {entity.path}
-          </a>
-        </Property>
-      </Localized>
+      <EntityContext
+        entity={entity}
+        localeCode={code}
+        navigateToPath={navigateToPath}
+      />
     </div>
   );
 }

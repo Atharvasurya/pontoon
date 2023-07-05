@@ -1,0 +1,84 @@
+.translationform {
+  line-height: 22px;
+  padding: 10px;
+}
+
+.translationform table {
+  width: 100%;
+}
+
+.translationform td:first {
+  width: calc(25% - 5px);
+}
+
+.translationform td:last-child {
+  width: 75%;
+}
+
+.translationform label {
+  background: transparent;
+  border: 1px solid #5e6475;
+  box-sizing: border-box;
+  color: #aaaaaa;
+  display: block;
+  font-weight: normal;
+  margin: 2px 5px 2px 0;
+  padding: 0 4px;
+}
+
+.translationform label > :not(:last-child)::after {
+  content: '·';
+  color: #7bc876;
+  padding: 0 3px;
+}
+
+.translationform label .stress {
+  color: #7bc876;
+}
+
+.translationform table tr > td > textarea {
+  min-height: 0;
+  height: 24px;
+  margin: 2px 0;
+  padding: 0 4px;
+}
+
+.translationform .accesskey-input {
+  border: none;
+  box-sizing: border-box;
+  float: left;
+  font-size: 14px;
+  height: 24px;
+  margin: 2px 3px 2px 0;
+  text-align: center;
+  width: 24px;
+}
+
+.translationform .accesskey-input:focus {
+  outline: none;
+}
+
+.translationform .accesskeys {
+  float: right;
+  margin: 2px 0;
+  width: calc(100% - 27px);
+}
+
+.translationform .accesskeys .key {
+  border: 1px solid #5e6475;
+  background: #4d5967;
+  color: #ebebeb;
+  cursor: pointer;
+  display: inline-block;
+  line-height: 22px;
+  margin-right: 3px;
+  padding: 0;
+  text-align: center;
+  vertical-align: top;
+  width: 24px;
+}
+
+.translationform .accesskeys .key.active,
+.translationform .accesskeys .key:hover {
+  border-color: #7bc876;
+}

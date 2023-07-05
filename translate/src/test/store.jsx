@@ -11,7 +11,7 @@ import { mount } from 'enzyme';
 import { createMemoryHistory } from 'history';
 
 import { LocationProvider } from '~/context/Location';
-import { UPDATE } from '~/core/user/actions';
+import { UPDATE } from '~/modules/user/actions';
 import { reducer } from '~/rootReducer';
 
 import { MockLocalizationProvider } from './utils';
@@ -28,20 +28,24 @@ export const createReduxStore = (initialState = {}) =>
     preloadedState: initialState,
   });
 
+export const MockStore = ({ children, store, history = HISTORY }) => (
+  <Provider store={store}>
+    <LocationProvider history={history}>
+      <MockLocalizationProvider>{children}</MockLocalizationProvider>
+    </LocationProvider>
+  </Provider>
+);
+
 export const mountComponentWithStore = (
   Component,
   store,
   props = {},
-  history = HISTORY,
+  history,
 ) =>
   mount(
-    <Provider store={store}>
-      <LocationProvider history={history}>
-        <MockLocalizationProvider>
-          <Component {...props} />
-        </MockLocalizationProvider>
-      </LocationProvider>
-    </Provider>,
+    <MockStore store={store} history={history}>
+      <Component {...props} />
+    </MockStore>,
   );
 
 export function createDefaultUser(store, initial = {}) {

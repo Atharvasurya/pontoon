@@ -52,6 +52,16 @@ class TermQuerySet(models.QuerySet):
 
         return terms
 
+    def delete(self, *args, **kwargs):
+        """
+        Before deleting Terms, obsolete their Entities
+        """
+        for term in self:
+            term.obsolete_entity()
+        update_terminology_project_stats()
+
+        super().delete(*args, **kwargs)
+
 
 class Term(models.Model):
     text = models.CharField(max_length=255)
@@ -80,7 +90,6 @@ class Term(models.Model):
     )
 
     case_sensitive = models.BooleanField(default=False)
-    exact_match = models.BooleanField(default=False)
     do_not_translate = models.BooleanField(default=False)
     forbidden = models.BooleanField(default=False)
 

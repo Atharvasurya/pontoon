@@ -2,7 +2,7 @@ import React, { createContext, useEffect, useState } from 'react';
 
 import { useActiveTranslation } from './EntityView';
 
-export type HelperSelection = Readonly<{
+type HelperSelection = Readonly<{
   /**
    * Index of selected tab in the helpers box. Assumes the following:
    * - `0`: Machinery
@@ -32,11 +32,14 @@ export function HelperSelectionProvider({
   children: React.ReactElement;
 }) {
   const translation = useActiveTranslation();
-  const [state, setState] = useState<HelperSelection>(() => ({
+  const [state, setState] = useState(() => ({
     ...initHelpers,
     setElement: (element) => setState((prev) => ({ ...prev, element })),
     setTab: (tab) => setState((prev) => ({ ...prev, tab, element: -1 })),
-  }));
+  })) as [
+    HelperSelection,
+    React.Dispatch<React.SetStateAction<HelperSelection>>,
+  ];
 
   useEffect(() => state.setElement(-1), [translation]);
 

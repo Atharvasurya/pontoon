@@ -107,12 +107,10 @@ Installation
      your Postgres database. It takes the form
      ``postgres://username:password@server_addr/database_name``.
 
-   - ``SITE_URL`` should be set to the URL you will use to connect to your
-     local development site. Some people prefer to use
-     ``http://127.0.0.1:8000`` instead of ``localhost``. However, should you
-     decide to change the ``SITE_URL``, you also need to request_
-     the new ``FXA_CLIENT_ID`` and ``FXA_SECRET_KEY``, and our in-context demo
-     site ``http://localhost:8000/in-context/`` will require change of base url.
+   - ``SITE_URL`` should be set to the URL you will use to connect to your local development site.
+     Some people prefer to use ``http://127.0.0.1:8000`` instead of ``localhost``.
+     However, should you decide to change the ``SITE_URL``,
+     you also need to request_ the new ``FXA_CLIENT_ID`` and ``FXA_SECRET_KEY``.
 
 6. Initialize your database by running the migrations:
 
@@ -175,14 +173,19 @@ Extra settings
 The following extra settings can be added to your ``.env`` file.
 
 ``GOOGLE_TRANSLATE_API_KEY``
-   Set your `Google Cloud Translation API key`_ to use machine translation by Google.
+   Set your `Google Cloud Translation API`_ key to use generic machine translation
+   engine by Google.
+``GOOGLE_AUTOML_PROJECT_ID``
+   Set your `Google Cloud AutoML Translation`_ model ID to use custom machine
+   translation engine by Google.
 ``MICROSOFT_TRANSLATOR_API_KEY``
-   Set your `Microsoft Translator API key`_ to use machine translation by Microsoft.
+   Set your `Microsoft Translator API`_ key to use machine translation by Microsoft.
 ``GOOGLE_ANALYTICS_KEY``
    Set your `Google Analytics key`_ to use Google Analytics.
 ``MANUAL_SYNC``
    Enable Sync button in project Admin.
 
-.. _Microsoft Translator API key: http://msdn.microsoft.com/en-us/library/hh454950
+.. _Microsoft Translator API: http://msdn.microsoft.com/en-us/library/hh454950
 .. _Google Analytics key: https://www.google.com/analytics/
-.. _Google Cloud Translation API key: https://cloud.google.com/translate/
+.. _Google Cloud Translation API: https://cloud.google.com/translate/
+.. _Google Cloud AutoML Translation: https://cloud.google.com/translate/

@@ -1,7 +1,6 @@
 import json
 
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import EmailMessage
@@ -172,18 +171,14 @@ def ajax_permissions(request, locale):
     translators = locale.translators_group.user_set.exclude(pk__in=managers).order_by(
         "email"
     )
-    all_users = (
-        User.objects.exclude(pk__in=managers | translators)
-        .exclude(email="")
-        .order_by("email")
+    contributors = users_with_translations_counts(
+        None,
+        Q(locale=locale)
+        & Q(user__isnull=False)
+        & Q(user__profile__system_user=False)
+        & ~Q(user__pk__in=managers | translators),
+        None,
     )
-
-    contributors_emails = {
-        contributor.email
-        for contributor in users_with_translations_counts(
-            None, Q(locale=locale) & Q(user__isnull=False), None
-        )
-    }
 
     locale_projects = locale.projects_permissions(request.user)
 
@@ -192,13 +187,12 @@ def ajax_permissions(request, locale):
         "teams/includes/permissions.html",
         {
             "locale": locale,
-            "all_users": all_users,
-            "contributors_emails": contributors_emails,
+            "contributors": contributors,
             "translators": translators,
             "managers": managers,
             "locale_projects": locale_projects,
             "project_locale_form": project_locale_form,
-            "all_projects_in_translation": all([x[5] for x in locale_projects]),
+            "all_projects_in_translation": all([x[4] for x in locale_projects]),
         },
     )
 
@@ -217,7 +211,7 @@ def request_item(request, locale=None):
         # Validate projects
         project_list = (
             Project.objects.visible()
-            .visible_for(request.user)
+            .visible_for(user)
             .filter(slug__in=slug_list, can_be_requested=True)
         )
         if not project_list:
@@ -266,18 +260,19 @@ def request_item(request, locale=None):
     if settings.PROJECT_MANAGERS[0] != "":
         template = get_template("teams/email_request_item.jinja")
         mail_body = template.render(payload)
+        cc = {user.contact_email}
+        if locale:
+            cc.update(
+                set(locale.managers_group.user_set.values_list("email", flat=True))
+            )
 
         EmailMessage(
             subject=mail_subject,
             body=mail_body,
-            from_email=settings.LOCALE_REQUEST_FROM_EMAIL,
+            from_email=settings.DEFAULT_FROM_EMAIL,
             to=settings.PROJECT_MANAGERS,
-            cc=locale.managers_group.user_set.exclude(pk=user.pk).values_list(
-                "email", flat=True
-            )
-            if locale
-            else "",
-            reply_to=[user.email],
+            cc=cc,
+            reply_to=[user.contact_email],
         ).send()
     else:
         raise ImproperlyConfigured(
@@ -301,13 +296,15 @@ class LocaleContributorsView(ContributorsMixin, DetailView):
         context = super().get_context_data(locale=self.object, **kwargs)
         contributors = context["contributors"]
         context["managers"] = [
-            c for c in contributors if c.user_locale_role == "manager"
+            c for c in contributors if c.user_locale_role == "Manager"
         ]
         context["translators"] = [
-            c for c in contributors if c.user_locale_role == "translator"
+            c for c in contributors if c.user_locale_role == "Translator"
         ]
         context["regular_contributors"] = [
-            c for c in contributors if c.user_locale_role == "contributor"
+            c
+            for c in contributors
+            if c not in context["managers"] and c not in context["translators"]
         ]
         return context
 

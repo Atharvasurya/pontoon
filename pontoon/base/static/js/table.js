@@ -9,12 +9,12 @@ $.expr[':'].containsi = function (a, i, m) {
 };
 
 /* Latest activity tooltip */
-var date_formatter = new Intl.DateTimeFormat('en-GB', {
+var date_formatter = new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   }),
-  time_formatter = new Intl.DateTimeFormat('en-GB', {
+  time_formatter = new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -125,16 +125,15 @@ var Pontoon = (function (my) {
               translated =
                 legend.find('.translated .value').data('value') / all || 0,
               pretranslated =
-                legend.find('.pretranslated .value').data('value') / all || 0;
+                legend.find('.pretranslated .value').data('value') / all || 0,
+              warnings =
+                legend.find('.warnings .value').data('value') / all || 0;
 
             if ($(el).find('.progress .not-ready').length) {
               return 'not-ready';
             }
 
-            return {
-              translated: translated,
-              pretranslated: pretranslated,
-            };
+            return translated + pretranslated + warnings;
           }
 
           function getUnreviewed(el) {
@@ -189,7 +188,7 @@ var Pontoon = (function (my) {
           node.addClass(cls);
 
           items.sort(function (a, b) {
-            // Sort by translated, then by pretranslated percentage
+            // Sort by completion
             if (node.is('.progress')) {
               var chartA = getProgress(a),
                 chartB = getProgress(b);
@@ -205,10 +204,7 @@ var Pontoon = (function (my) {
                 return 1 * dir;
               }
 
-              return (
-                (chartA.translated - chartB.translated) * dir ||
-                (chartA.pretranslated - chartB.pretranslated) * dir
-              );
+              return (chartA - chartB) * dir;
 
               // Sort by unreviewed state
             } else if (node.is('.unreviewed-status')) {

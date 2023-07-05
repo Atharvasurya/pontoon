@@ -30,12 +30,6 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "False") != "False"
 
 HEROKU_DEMO = os.environ.get("HEROKU_DEMO", "False") != "False"
 
-# Automatically log in the user with username 'AUTO_LOGIN_USERNAME'
-# and password 'AUTO_LOGIN_PASSWORD'
-AUTO_LOGIN = os.environ.get("AUTO_LOGIN", "False") != "False"
-AUTO_LOGIN_USERNAME = os.environ.get("AUTO_LOGIN_USERNAME", None)
-AUTO_LOGIN_PASSWORD = os.environ.get("AUTO_LOGIN_PASSWORD", None)
-
 LOGOUT_REDIRECT_URL = "/"
 
 ADMINS = MANAGERS = (
@@ -45,10 +39,21 @@ ADMINS = MANAGERS = (
 # A list of project manager email addresses to send project requests to
 PROJECT_MANAGERS = os.environ.get("PROJECT_MANAGERS", "").split(",")
 
-# Email from which new locale requests are sent.
-LOCALE_REQUEST_FROM_EMAIL = os.environ.get(
-    "LOCALE_REQUEST_FROM_EMAIL", "pontoon@example.com"
-)
+
+def _get_site_url_netloc():
+    from urllib.parse import urlparse
+    from django.conf import settings
+
+    return urlparse(settings.SITE_URL).netloc
+
+
+def _default_from_email():
+    return os.environ.get(
+        "DEFAULT_FROM_EMAIL", f"Pontoon <pontoon@{_get_site_url_netloc()}>"
+    )
+
+
+DEFAULT_FROM_EMAIL = lazy(_default_from_email, str)()
 
 # VCS identity to be used when committing translations.
 VCS_SYNC_NAME = os.environ.get("VCS_SYNC_NAME", "Pontoon")
@@ -92,6 +97,15 @@ BROKER_URL = os.environ.get("RABBITMQ_URL", None)
 # Google Cloud Translation API key
 GOOGLE_TRANSLATE_API_KEY = os.environ.get("GOOGLE_TRANSLATE_API_KEY", "")
 
+# Google Cloud AutoML Translation Project ID
+GOOGLE_AUTOML_PROJECT_ID = os.environ.get("GOOGLE_AUTOML_PROJECT_ID", "")
+
+# It is recommended to make Google Cloud AutoML Translation warmup requests every minute,
+# although in our experience every 5 minutes (300 seconds) is sufficient.
+GOOGLE_AUTOML_WARMUP_INTERVAL = float(
+    os.environ.get("GOOGLE_AUTOML_WARMUP_INTERVAL", "300")
+)
+
 # Microsoft Translator API Key
 MICROSOFT_TRANSLATOR_API_KEY = os.environ.get("MICROSOFT_TRANSLATOR_API_KEY", "")
 
@@ -113,6 +127,7 @@ EMAIL_HOST_USER = os.environ.get(
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.sendgrid.net")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") != "False"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False") != "False"
 EMAIL_HOST_PASSWORD = os.environ.get(
     "EMAIL_HOST_PASSWORD", os.environ.get("SENDGRID_PASSWORD", "")
 )
@@ -133,7 +148,6 @@ INSTALLED_APPS = (
     "pontoon.base",
     "pontoon.contributors",
     "pontoon.checks",
-    "pontoon.in_context",
     "pontoon.insights",
     "pontoon.localizations",
     "pontoon.machinery",
@@ -168,6 +182,7 @@ INSTALLED_APPS = (
     "allauth.socialaccount.providers.github",
     "allauth.socialaccount.providers.google",
     "allauth.socialaccount.providers.gitlab",
+    "allauth.socialaccount.providers.keycloak",
     "notifications",
     "graphene_django",
     "django_ace",
@@ -189,7 +204,6 @@ MIDDLEWARE = (
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "csp.middleware.CSPMiddleware",
-    "pontoon.base.middleware.AutomaticLoginUserMiddleware",
 )
 
 CONTEXT_PROCESSORS = (
@@ -306,6 +320,7 @@ PIPELINE_CSS = {
             "css/sidebar_menu.css",
             "css/multiple_team_selector.css",
             "css/manual_notifications.css",
+            "css/insights_charts.css",
             "css/insights.css",
         ),
         "output_filename": "css/project.min.css",
@@ -317,6 +332,7 @@ PIPELINE_CSS = {
             "css/heading_info.css",
             "css/info.css",
             "css/download_selector.css",
+            "css/insights_charts.css",
             "css/insights.css",
         ),
         "output_filename": "css/localization.min.css",
@@ -337,6 +353,7 @@ PIPELINE_CSS = {
             "css/heading_info.css",
             "css/team.css",
             "css/request.css",
+            "css/insights_charts.css",
             "css/insights.css",
             "css/info.css",
         ),
@@ -357,6 +374,7 @@ PIPELINE_CSS = {
     "profile": {
         "source_filenames": (
             "css/contributor.css",
+            "css/insights_charts.css",
             "css/profile.css",
         ),
         "output_filename": "css/profile.min.css",
@@ -366,6 +384,7 @@ PIPELINE_CSS = {
             "css/multiple_team_selector.css",
             "css/contributor.css",
             "css/team_selector.css",
+            "css/toggle.css",
             "css/settings.css",
         ),
         "output_filename": "css/settings.min.css",
@@ -391,13 +410,6 @@ PIPELINE_CSS = {
         ),
         "output_filename": "css/contributors.min.css",
     },
-    "in_context": {
-        "source_filenames": (
-            "css/bootstrap.min.css",
-            "css/agency.css",
-        ),
-        "output_filename": "css/in_context.min.css",
-    },
     "terms": {
         "source_filenames": ("css/terms.css",),
         "output_filename": "css/terms.min.css",
@@ -411,7 +423,7 @@ PIPELINE_CSS = {
 PIPELINE_JS = {
     "base": {
         "source_filenames": (
-            "js/lib/jquery-1.11.1.min.js",
+            "js/lib/jquery-3.6.1.js",
             "js/lib/jquery.timeago.js",
             "js/lib/jquery.color-2.1.2.js",
             "js/lib/nprogress.js",
@@ -429,7 +441,6 @@ PIPELINE_JS = {
     },
     "admin_project": {
         "source_filenames": (
-            "js/lib/jquery-ui.js",
             "js/double_list_selector.js",
             "js/multiple_team_selector.js",
             "js/admin_project.js",
@@ -443,6 +454,7 @@ PIPELINE_JS = {
             "js/table.js",
             "js/progress-chart.js",
             "js/tabs.js",
+            "js/insights_charts.js",
             "js/insights.js",
             "js/info.js",
         ),
@@ -458,6 +470,7 @@ PIPELINE_JS = {
             "js/sidebar_menu.js",
             "js/multiple_team_selector.js",
             "js/manual_notifications.js",
+            "js/insights_charts.js",
             "js/insights.js",
         ),
         "output_filename": "js/project.min.js",
@@ -479,6 +492,7 @@ PIPELINE_JS = {
             "js/tabs.js",
             "js/request.js",
             "js/permissions.js",
+            "js/insights_charts.js",
             "js/insights.js",
             "js/info.js",
         ),
@@ -493,12 +507,16 @@ PIPELINE_JS = {
         "output_filename": "js/teams.min.js",
     },
     "profile": {
-        "source_filenames": ("js/contributor.js",),
+        "source_filenames": (
+            "js/lib/Chart.bundle.js",
+            "js/insights_charts.js",
+            "js/profile.js",
+        ),
         "output_filename": "js/profile.min.js",
     },
     "settings": {
         "source_filenames": (
-            "js/lib/jquery-ui.js",
+            "js/lib/jquery-ui-1.13.2.js",
             "js/multiple_team_selector.js",
             "js/team_selector.js",
             "js/settings.js",
@@ -588,10 +606,7 @@ STATICFILES_DIRS = [
 
 # Set ALLOWED_HOSTS based on SITE_URL setting.
 def _allowed_hosts():
-    from urllib.parse import urlparse
-    from django.conf import settings
-
-    host = urlparse(settings.SITE_URL).netloc  # Remove protocol and path
+    host = _get_site_url_netloc()  # Remove protocol and path
     result = [host]
     # In order to be able to use ALLOWED_HOSTS to validate URLs, we need to
     # have a version of the host that contains the port. This only applies
@@ -825,10 +840,9 @@ CELERY_ACCEPT_CONTENT = ["pickle"]
 
 # Settings related to the CORS mechanisms.
 # For the sake of integration with other sites,
-# some of javascript files (e.g. pontoon.js)
-# require Access-Control-Allow-Origin header to be set as '*'.
+# all origins are allowed for the GraphQL endpoint.
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_URLS_REGEX = r"^/(pontoon\.js|graphql/?)$"
+CORS_URLS_REGEX = r"^/graphql/?$"
 
 SOCIALACCOUNT_ENABLED = True
 SOCIALACCOUNT_ADAPTER = "pontoon.base.adapter.PontoonSocialAdapter"
@@ -867,6 +881,10 @@ GITLAB_SECRET_KEY = os.environ.get("GITLAB_SECRET_KEY")
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_SECRET_KEY = os.environ.get("GOOGLE_SECRET_KEY")
 
+# Keycloak Accounts
+KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET")
+
 # All settings related to the AllAuth
 SOCIALACCOUNT_PROVIDERS = {
     "fxa": {
@@ -875,15 +893,11 @@ SOCIALACCOUNT_PROVIDERS = {
         "PROFILE_ENDPOINT": FXA_PROFILE_ENDPOINT,
     },
     "gitlab": {"GITLAB_URL": GITLAB_URL, "SCOPE": ["read_user"]},
+    "keycloak": {
+        "KEYCLOAK_URL": os.environ.get("KEYCLOAK_URL"),
+        "KEYCLOAK_REALM": os.environ.get("KEYCLOAK_REALM"),
+    },
 }
-
-# Defined all trusted origins that will be returned in pontoon.js file.
-if os.environ.get("JS_TRUSTED_ORIGINS"):
-    JS_TRUSTED_ORIGINS = os.environ.get("JS_TRUSTED_ORIGINS").split(",")
-else:
-    JS_TRUSTED_ORIGINS = [
-        SITE_URL,
-    ]
 
 # Configuration of `django-notifications-hq` app
 DJANGO_NOTIFICATIONS_CONFIG = {
@@ -898,8 +912,5 @@ NOTIFICATIONS_MAX_COUNT = 7
 # Integer representing a day of the week on which the `send_suggestion_notifications`
 # management command will run.
 SUGGESTION_NOTIFICATIONS_DAY = os.environ.get("SUGGESTION_NOTIFICATIONS_DAY", 4)
-
-# Number of events displayed on the Contributor's timeline per page.
-CONTRIBUTORS_TIMELINE_EVENTS_PER_PAGE = 10
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"

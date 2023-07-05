@@ -20,7 +20,7 @@ from django.contrib.auth.models import User, Group
 from django.contrib.postgres.fields import ArrayField
 
 from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator, validate_email
+from django.core.validators import URLValidator
 from django.db import models
 from django.db.models import (
     Count,
@@ -43,7 +43,7 @@ from jsonfield import JSONField
 from pontoon.actionlog.models import ActionLog
 from pontoon.actionlog.utils import log_action
 from pontoon.base import utils
-from pontoon.base.templatetags.helpers import as_simple_translation
+from pontoon.base.fluent import get_simple_preview
 from pontoon.checks import DB_FORMATS
 from pontoon.checks.utils import save_failed_checks
 from pontoon.db import IContainsCollate, LevenshteinDistance  # noqa
@@ -120,6 +120,11 @@ def user_name_or_email(self):
 
 
 @property
+def user_contact_email(self):
+    return self.profile.contact_email or self.email
+
+
+@property
 def user_display_name(self):
     return self.first_name or self.email.split("@")[0]
 
@@ -137,12 +142,57 @@ def user_display_name_or_blank(cls, user):
 
 
 @property
+def user_translator_for_locales(self):
+    """A list of locales, in which the user is assigned Translator permissions.
+
+    Only includes explicitly assigned locales for superusers.
+    """
+    locales = []
+
+    for group in self.groups.all():
+        locale = group.translated_locales.first()
+        if locale:
+            locales.append(locale)
+
+    return locales
+
+
+@property
+def user_manager_for_locales(self):
+    """A list of locales, in which the user is assigned Manager permissions.
+
+    Only includes explicitly assigned locales for superusers.
+    """
+    locales = []
+
+    for group in self.groups.all():
+        locale = group.managed_locales.first()
+        if locale:
+            locales.append(locale)
+
+    return locales
+
+
+@property
 def user_translated_locales(self):
-    locales = get_objects_for_user(
+    """A list of locale codes the user has permission to translate.
+
+    Includes all locales for superusers.
+    """
+    return get_objects_for_user(
         self, "base.can_translate_locale", accept_global_perms=False
     )
 
-    return locales.values_list("code", flat=True)
+
+@property
+def user_managed_locales(self):
+    """A list of locale codes the user has permission to manage.
+
+    Includes all locales for superusers.
+    """
+    return get_objects_for_user(
+        self, "base.can_manage_locale", accept_global_perms=False
+    )
 
 
 @property
@@ -168,15 +218,6 @@ def user_translated_projects(self):
     return permission_map
 
 
-@property
-def user_managed_locales(self):
-    locales = get_objects_for_user(
-        self, "base.can_manage_locale", accept_global_perms=False
-    )
-
-    return locales.values_list("code", flat=True)
-
-
 def user_role(self, managers=None, translators=None):
     """
     Prefetched managers and translators dicts help reduce the number of queries
@@ -185,30 +226,41 @@ def user_role(self, managers=None, translators=None):
     if self.is_superuser:
         return "Admin"
 
+    if self.pk is None or self.profile.system_user:
+        return "System User"
+
     if managers is not None:
         if self in managers:
             return "Manager for " + ", ".join(managers[self])
     else:
         if self.managed_locales:
-            return "Manager for " + ", ".join(self.managed_locales)
+            return "Manager for " + ", ".join(
+                self.managed_locales.values_list("code", flat=True)
+            )
 
     if translators is not None:
         if self in translators:
             return "Translator for " + ", ".join(translators[self])
     else:
         if self.translated_locales:
-            return "Translator for " + ", ".join(self.translated_locales)
+            return "Translator for " + ", ".join(
+                self.translated_locales.values_list("code", flat=True)
+            )
 
     return "Contributor"
 
 
 def user_locale_role(self, locale):
+    if self.is_superuser:
+        return "Admin"
+    if self.pk is None or self.profile.system_user:
+        return "System User"
     if self in locale.managers_group.user_set.all():
-        return "manager"
+        return "Manager"
     if self in locale.translators_group.user_set.all():
-        return "translator"
+        return "Translator"
     else:
-        return "contributor"
+        return "Contributor"
 
 
 @property
@@ -238,7 +290,7 @@ def can_translate(self, locale, project):
     """Check if user has suitable permissions to translate in given locale or project/locale."""
 
     # Locale managers can translate all projects
-    if locale.code in self.managed_locales:
+    if locale in self.managed_locales:
         return True
 
     project_locale = ProjectLocale.objects.get(project=project, locale=locale)
@@ -250,7 +302,11 @@ def can_translate(self, locale, project):
 
 def is_new_contributor(self, locale):
     """Return True if the user hasn't made contributions to the locale yet."""
-    return not self.translation_set.filter(locale=locale).exists()
+    return (
+        not self.translation_set.filter(locale=locale)
+        .exclude(entity__resource__project__system_project=True)
+        .exists()
+    )
 
 
 @property
@@ -295,7 +351,7 @@ def serialized_notifications(self):
         is_comment = False
 
         if hasattr(notification.actor, "slug"):
-            if "new string" in notification.verb and self.profile.custom_homepage:
+            if "new string" in notification.verb:
                 actor = {
                     "anchor": notification.actor.name,
                     "url": reverse(
@@ -305,7 +361,7 @@ def serialized_notifications(self):
                             "part": "all-resources",
                         },
                     )
-                    + "?status=missing",
+                    + "?status=missing,pretranslated",
                 }
             else:
                 actor = {
@@ -387,16 +443,33 @@ def user_serialize(self):
     }
 
 
+@property
+def latest_action(self):
+    """
+    Return the date of the latest user activity (translation submission or review).
+    """
+    try:
+        return ActionLog.objects.filter(
+            performed_by=self,
+            action_type__startswith="translation:",
+        ).latest("created_at")
+    except ActionLog.DoesNotExist:
+        return None
+
+
 User.add_to_class("profile_url", user_profile_url)
 User.add_to_class("gravatar_url", user_gravatar_url)
 User.add_to_class("gravatar_url_small", user_gravatar_url_small)
 User.add_to_class("name_or_email", user_name_or_email)
+User.add_to_class("contact_email", user_contact_email)
 User.add_to_class("display_name", user_display_name)
 User.add_to_class("display_name_and_email", user_display_name_and_email)
 User.add_to_class("display_name_or_blank", user_display_name_or_blank)
+User.add_to_class("translator_for_locales", user_translator_for_locales)
+User.add_to_class("manager_for_locales", user_manager_for_locales)
 User.add_to_class("translated_locales", user_translated_locales)
-User.add_to_class("translated_projects", user_translated_projects)
 User.add_to_class("managed_locales", user_managed_locales)
+User.add_to_class("translated_projects", user_translated_projects)
 User.add_to_class("role", user_role)
 User.add_to_class("locale_role", user_locale_role)
 User.add_to_class("contributed_translations", contributed_translations)
@@ -407,6 +480,7 @@ User.add_to_class("menu_notifications", menu_notifications)
 User.add_to_class("unread_notifications_display", unread_notifications_display)
 User.add_to_class("serialized_notifications", serialized_notifications)
 User.add_to_class("serialize", user_serialize)
+User.add_to_class("latest_action", latest_action)
 
 
 class PermissionChangelog(models.Model):
@@ -526,7 +600,11 @@ class AggregatedStats(models.Model):
 
     @property
     def completed_strings(self):
-        return self.approved_strings + self.strings_with_warnings
+        return (
+            self.approved_strings
+            + self.pretranslated_strings
+            + self.strings_with_warnings
+        )
 
     @property
     def complete(self):
@@ -636,6 +714,15 @@ class Locale(AggregatedStats):
         <a href="https://translate.google.com/intl/en/about/languages/">
         supported locales</a>. Choose a matching locale from the list or leave blank to disable
         support for Google Cloud Translation machine translation service.
+        """,
+    )
+
+    google_automl_model = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="""
+        ID of a custom model, trained using locale translation memory. If the value is set,
+        Pontoon will use the Google AutoML Translation instead of the generic Translation API.
         """,
     )
 
@@ -783,8 +870,8 @@ class Locale(AggregatedStats):
     population = models.PositiveIntegerField(
         default=0,
         help_text="""
-        Number of native speakers. Find locale code in CLDR territoryInfo.json:
-        https://github.com/unicode-cldr/cldr-core/blob/master/supplemental/territoryInfo.json
+        Number of native speakers. Find locale code in
+        <a href="https://github.com/unicode-org/cldr-json/blob/main/cldr-json/cldr-core/supplemental/territoryInfo.json">CLDR territoryInfo.json</a>
         and multiply its "_populationPercent" with the territory "_population".
         Repeat if multiple occurrences of locale code exist and sum products.
         """,
@@ -799,6 +886,15 @@ class Locale(AggregatedStats):
         blank=True,
         null=True,
         related_name="locale_latest",
+    )
+
+    accesskey_localization = models.BooleanField(
+        default=True,
+        verbose_name="Access key localization",
+        help_text="""
+        Allow localization of access keys if they are part of a string.
+        Some locales don't translate access keys, mostly because they use non-Latin scripts.
+    """,
     )
 
     objects = LocaleQuerySet.as_manager()
@@ -820,7 +916,7 @@ class Locale(AggregatedStats):
             "pk": self.pk,
             "nplurals": self.nplurals,
             "plural_rule": self.plural_rule,
-            "cldr_plurals": self.cldr_plurals_list(),
+            "cldr_plurals": self.cldr_plurals_list_string(),
             "direction": self.direction,
             "script": self.script,
             "google_translate_code": self.google_translate_code,
@@ -836,7 +932,10 @@ class Locale(AggregatedStats):
             return [int(p) for p in self.cldr_plurals.split(",")]
 
     def cldr_plurals_list(self):
-        return ", ".join(map(Locale.cldr_id_to_plural, self.cldr_id_list()))
+        return map(Locale.cldr_id_to_plural, self.cldr_id_list())
+
+    def cldr_plurals_list_string(self):
+        return ", ".join(self.cldr_plurals_list())
 
     @classmethod
     def cldr_plural_to_id(self, cldr_plural):
@@ -863,8 +962,6 @@ class Locale(AggregatedStats):
             id  - id of project locale
             slug - slug of the project
             name - name of the project
-            all_users - (id, first_name, email) users that aren't translators of given project
-                locale.
             translators - (id, first_name, email) translators assigned to a project locale.
             contributors - (id, first_name, email) people who contributed for a project in
                 current locale.
@@ -914,17 +1011,6 @@ class Locale(AggregatedStats):
             "groups__pk",
         )
 
-        projects_all_users = defaultdict(set)
-
-        for project_locale in project_locales:
-            projects_all_users[project_locale["translators_group__pk"]] = list(
-                User.objects.exclude(email="")
-                .exclude(groups__projectlocales__pk=project_locale["id"])
-                .values("id", "first_name", "email")
-                .distinct()
-                .order_by("email")
-            )
-
         for project_locale in project_locales:
             group_pk = project_locale["translators_group__pk"]
             locale_projects.append(
@@ -932,7 +1018,6 @@ class Locale(AggregatedStats):
                     project_locale["id"],
                     project_locale["project__slug"],
                     project_locale["project__name"],
-                    projects_all_users[group_pk],
                     projects_translators[group_pk],
                     project_locale["has_custom_translators"],
                 )
@@ -971,8 +1056,9 @@ class Locale(AggregatedStats):
             resource__project__disabled=False,
             resource__project__system_project=False,
             resource__project__visibility=Project.Visibility.PUBLIC,
+            resource__entities__obsolete=False,
             locale=self,
-        ).aggregate_stats(self)
+        ).distinct().aggregate_stats(self)
 
     def stats(self):
         """Get locale stats used in All Resources part."""
@@ -990,11 +1076,10 @@ class Locale(AggregatedStats):
         ]
 
     def parts_stats(self, project):
-        """Get locale-project pages/paths with stats."""
+        """Get locale-project paths with stats."""
 
         def get_details(parts):
             return parts.order_by("title").values(
-                "url",
                 "title",
                 "resource__path",
                 "resource__deadline",
@@ -1006,95 +1091,15 @@ class Locale(AggregatedStats):
                 "approved_strings",
             )
 
-        pages = project.subpage_set.all()
         translatedresources = TranslatedResource.objects.filter(
             resource__project=project, resource__entities__obsolete=False, locale=self
         ).distinct()
-        details = []
-        unbound_details = []
-
-        # If subpages aren't defined,
-        # return resource paths with corresponding stats
-        if len(pages) == 0:
-            details = get_details(
-                translatedresources.annotate(
-                    title=F("resource__path"), url=F("resource__project__url")
-                )
-            )
-
-        # If project has defined subpages, return their names with
-        # corresponding project stats. If subpages have defined resources,
-        # only include stats for page resources.
-        elif len(pages) > 0:
-            # Each subpage must have resources defined
-            if pages[0].resources.exists():
-                locale_pages = pages.filter(resources__translatedresources__locale=self)
-                details = get_details(
-                    # List only subpages, whose resources are available for locale
-                    locale_pages.annotate(
-                        title=F("name"),
-                        resource__path=F("resources__path"),
-                        resource__deadline=F("resources__deadline"),
-                        resource__total_strings=F("resources__total_strings"),
-                        pretranslated_strings=F(
-                            "resources__translatedresources__pretranslated_strings"
-                        ),
-                        strings_with_errors=F(
-                            "resources__translatedresources__strings_with_errors"
-                        ),
-                        strings_with_warnings=F(
-                            "resources__translatedresources__strings_with_warnings"
-                        ),
-                        unreviewed_strings=F(
-                            "resources__translatedresources__unreviewed_strings"
-                        ),
-                        approved_strings=F(
-                            "resources__translatedresources__approved_strings"
-                        ),
-                    )
-                )
-
-            else:
-                locale_pages = pages.filter(
-                    project__resources__translatedresources__locale=self
-                ).exclude(project__resources__total_strings=0)
-                details = get_details(
-                    locale_pages.annotate(
-                        title=F("name"),
-                        resource__path=F("project__resources__path"),
-                        resource__deadline=F("project__resources__deadline"),
-                        resource__total_strings=F("project__resources__total_strings"),
-                        pretranslated_strings=F(
-                            "project__resources__translatedresources__pretranslated_strings"
-                        ),
-                        strings_with_errors=F(
-                            "project__resources__translatedresources__strings_with_errors"
-                        ),
-                        strings_with_warnings=F(
-                            "project__resources__translatedresources__strings_with_warnings"
-                        ),
-                        unreviewed_strings=F(
-                            "project__resources__translatedresources__unreviewed_strings"
-                        ),
-                        approved_strings=F(
-                            "project__resources__translatedresources__approved_strings"
-                        ),
-                    )
-                )
-
-            # List resources not bound to subpages as regular resources
-            bound_resources = locale_pages.values_list("resources", flat=True)
-            unbound_tr = translatedresources.exclude(resource__pk__in=bound_resources)
-            unbound_details = get_details(
-                unbound_tr.annotate(
-                    title=F("resource__path"), url=F("resource__project__url")
-                )
-            )
+        details = list(
+            get_details(translatedresources.annotate(title=F("resource__path")))
+        )
 
         all_resources = ProjectLocale.objects.get(project=project, locale=self)
-
-        details_list = list(details) + list(unbound_details)
-        details_list.append(
+        details.append(
             {
                 "title": "all-resources",
                 "resource__path": [],
@@ -1108,7 +1113,7 @@ class Locale(AggregatedStats):
             }
         )
 
-        return details_list
+        return details
 
     def save(self, *args, **kwargs):
         old = Locale.objects.get(pk=self.pk) if self.pk else None
@@ -1301,20 +1306,6 @@ class Project(AggregatedStats):
         choices=Visibility.choices,
     )
 
-    # Website for in place localization
-    url = models.URLField("URL", blank=True)
-    width = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="""
-        Default website (iframe) width in pixels.
-        If set, sidebar will be opened by default.
-    """,
-    )
-    links = models.BooleanField(
-        "Keep links on the project website clickable", default=False
-    )
-
     langpack_url = models.URLField(
         "Language pack URL",
         blank=True,
@@ -1380,9 +1371,6 @@ class Project(AggregatedStats):
             "name": self.name,
             "slug": self.slug,
             "info": self.info,
-            "url": self.url,
-            "width": self.width or "",
-            "links": self.links or "",
             "langpack_url": self.langpack_url or "",
             "contact": self.contact.serialize() if self.contact else None,
         }
@@ -1539,13 +1527,6 @@ class Project(AggregatedStats):
             resource__project=self, resource__entities__obsolete=False
         ).distinct().aggregate_stats(self)
 
-    def parts_to_paths(self, paths):
-        try:
-            subpage = Subpage.objects.get(project=self, name__in=paths)
-            return subpage.resources.values_list("path")
-        except Subpage.DoesNotExist:
-            return paths
-
     @property
     def avg_string_count(self):
         return int(self.total_strings / self.enabled_locales)
@@ -1581,7 +1562,64 @@ class UserProfile(models.Model):
     user = models.OneToOneField(
         User, models.CASCADE, related_name="profile", primary_key=True
     )
-    # Other fields here.
+
+    # Personal information
+    username = models.SlugField(unique=True, blank=True, null=True)
+    contact_email = models.EmailField("Contact email address", blank=True, null=True)
+    contact_email_verified = models.BooleanField(default=False)
+    bio = models.TextField(max_length=160, blank=True, null=True)
+
+    # External accounts
+    chat = models.CharField("Chat username", max_length=255, blank=True, null=True)
+    github = models.CharField("GitHub username", max_length=255, blank=True, null=True)
+    bugzilla = models.EmailField("Bugzilla email address", blank=True, null=True)
+
+    # Visibility
+    class Visibility(models.TextChoices):
+        ALL = "Public", "Public"
+        TRANSLATORS = "Translators", "Users with translator rights"
+
+    class VisibilityLoggedIn(models.TextChoices):
+        LOGGED_IN = "Logged-in users", "Logged-in users"
+        TRANSLATORS = "Translators", "Users with translator rights"
+
+    visibility_email = models.CharField(
+        "Email address",
+        max_length=20,
+        default=VisibilityLoggedIn.TRANSLATORS,
+        choices=VisibilityLoggedIn.choices,
+    )
+
+    visibility_external_accounts = models.CharField(
+        "External accounts",
+        max_length=20,
+        default=Visibility.TRANSLATORS,
+        choices=Visibility.choices,
+    )
+
+    visibility_self_approval = models.CharField(
+        "Self-approval rate",
+        max_length=20,
+        default=Visibility.ALL,
+        choices=Visibility.choices,
+    )
+
+    visibility_approval = models.CharField(
+        "Approval rate",
+        max_length=20,
+        default=Visibility.ALL,
+        choices=Visibility.choices,
+    )
+
+    # Notification subscriptions
+    new_string_notifications = models.BooleanField(default=True)
+    project_deadline_notifications = models.BooleanField(default=True)
+    comment_notifications = models.BooleanField(default=True)
+    unreviewed_suggestion_notifications = models.BooleanField(default=True)
+    review_notifications = models.BooleanField(default=True)
+    new_contributor_notifications = models.BooleanField(default=True)
+
+    # Translation settings
     quality_checks = models.BooleanField(default=True)
     force_suggestions = models.BooleanField(default=False)
 
@@ -1590,10 +1628,6 @@ class UserProfile(models.Model):
 
     # Used to display strings from preferred source locale.
     preferred_source_locale = models.CharField(max_length=20, blank=True, null=True)
-
-    # Used to keep track of start/step no. of user tour.
-    # Not started:0, Completed: -1, Finished Step No. otherwise
-    tour_status = models.IntegerField(default=0)
 
     # Defines the order of locales displayed in locale tab.
     locales_order = ArrayField(
@@ -1605,13 +1639,12 @@ class UserProfile(models.Model):
     # Used to dismiss promotional banner for the Pontoon Add-On.
     has_dismissed_addon_promotion = models.BooleanField(default=False)
 
-    # Notification subscriptions
-    new_string_notifications = models.BooleanField(default=True)
-    project_deadline_notifications = models.BooleanField(default=True)
-    comment_notifications = models.BooleanField(default=True)
-    unreviewed_suggestion_notifications = models.BooleanField(default=True)
-    review_notifications = models.BooleanField(default=True)
-    new_contributor_notifications = models.BooleanField(default=True)
+    # Used to keep track of start/step no. of user tour.
+    # Not started:0, Completed: -1, Finished Step No. otherwise
+    tour_status = models.IntegerField(default=0)
+
+    # Used to mark users as system users.
+    system_user = models.BooleanField(default=False)
 
     @property
     def preferred_locales(self):
@@ -2172,16 +2205,6 @@ class Resource(models.Model):
             return path_format
 
 
-class Subpage(models.Model):
-    project = models.ForeignKey(Project, models.CASCADE)
-    name = models.CharField(max_length=128)
-    url = models.URLField("URL", blank=True)
-    resources = models.ManyToManyField(Resource, blank=True)
-
-    def __str__(self):
-        return self.name
-
-
 class EntityQuerySet(models.QuerySet):
     def get_filtered_entities(
         self, locale, query, rule, project=None, match_all=True, prefetch=None
@@ -2490,17 +2513,8 @@ class EntityQuerySet(models.QuerySet):
         )
 
     def authored_by(self, locale, emails):
-        def is_email(email):
-            """
-            Validate if user passed a real email.
-            """
-            try:
-                validate_email(email)
-                return True
-            except ValidationError:
-                return False
-
-        sanitized_emails = filter(is_email, emails)
+        # Validate if user passed a real email
+        sanitized_emails = filter(utils.is_email, emails)
         query = Q()
 
         if sanitized_emails:
@@ -2514,8 +2528,29 @@ class EntityQuerySet(models.QuerySet):
 
         return Q()
 
+    def reviewed_by(self, locale, emails):
+        # Validate if user passed a real email
+        sanitized_emails = filter(utils.is_email, emails)
+
+        if sanitized_emails:
+            return Q(translation__locale=locale) & (
+                Q(translation__approved_user__email__in=sanitized_emails)
+                | Q(translation__rejected_user__email__in=sanitized_emails)
+            )
+
+        return Q()
+
     def between_time_interval(self, locale, start, end):
         return Q(translation__locale=locale, translation__date__range=(start, end))
+
+    def between_review_time_interval(self, locale, start, end):
+        return Q(
+            Q(translation__locale=locale)
+            & (
+                Q(translation__approved_date__range=(start, end))
+                | Q(translation__rejected_date__range=(start, end))
+            )
+        )
 
     def prefetch_active_translations(self, locale):
         """
@@ -2753,13 +2788,6 @@ class Entity(DirtyFieldsMixin, models.Model):
         """
         return locale in self.changed_locales.all()
 
-    def mark_changed(self, locale):
-        """
-        Mark the given locale as having changed translations since the
-        last sync.
-        """
-        ChangedEntityLocale.objects.get_or_create(entity=self, locale=locale)
-
     def get_active_translation(self, plural_form=None):
         """
         Get active translation for a given entity and plural form.
@@ -2836,6 +2864,9 @@ class Entity(DirtyFieldsMixin, models.Model):
         extra=None,
         time=None,
         author=None,
+        review_time=None,
+        reviewer=None,
+        exclude_self_reviewed=None,
     ):
         """Get project entities with locale translations."""
 
@@ -2852,8 +2883,26 @@ class Entity(DirtyFieldsMixin, models.Model):
                     Entity.objects.between_time_interval(locale, start, end)
                 )
 
+        if review_time:
+            if re.match("^[0-9]{12}-[0-9]{12}$", review_time):
+                start, end = utils.parse_time_interval(review_time)
+                pre_filters.append(
+                    Entity.objects.between_review_time_interval(locale, start, end)
+                )
+
         if author:
             pre_filters.append(Entity.objects.authored_by(locale, author.split(",")))
+
+        if reviewer:
+            pre_filters.append(Entity.objects.reviewed_by(locale, reviewer.split(",")))
+
+        if exclude_self_reviewed:
+            pre_filters.append(
+                ~Q(
+                    Q(translation__approved_user=F("translation__user"))
+                    | Q(translation__rejected_user=F("translation__user"))
+                )
+            )
 
         if pre_filters:
             entities = Entity.objects.filter(
@@ -2879,7 +2928,6 @@ class Entity(DirtyFieldsMixin, models.Model):
 
         # Filter by path
         if paths:
-            paths = project.parts_to_paths(paths)
             entities = entities.filter(resource__path__in=paths)
 
         if status:
@@ -3071,7 +3119,7 @@ class TranslationQuerySet(models.QuerySet):
                 "translation_count": user.translations_count,
                 "role": user.user_role,
             }
-            for user in users_with_translations_counts(None, Q(id__in=self), limit=100)
+            for user in users_with_translations_counts(None, Q(id__in=self))
         ]
 
     def counts_per_minute(self):
@@ -3106,6 +3154,24 @@ class TranslationQuerySet(models.QuerySet):
             )
 
         return translations
+
+    def bulk_mark_changed(self):
+        changed_entities = {}
+        existing = ChangedEntityLocale.objects.values_list(
+            "entity", "locale"
+        ).distinct()
+
+        for translation in self.exclude(
+            entity__resource__project__data_source=Project.DataSource.DATABASE
+        ):
+            key = (translation.entity.pk, translation.locale.pk)
+
+            if key not in existing:
+                changed_entities[key] = ChangedEntityLocale(
+                    entity=translation.entity, locale=translation.locale
+                )
+
+        ChangedEntityLocale.objects.bulk_create(changed_entities.values())
 
 
 class Translation(DirtyFieldsMixin, models.Model):
@@ -3218,7 +3284,6 @@ class Translation(DirtyFieldsMixin, models.Model):
         )
 
         if paths:
-            paths = project.parts_to_paths(paths)
             translations = translations.filter(entity__resource__path__in=paths)
 
         return translations
@@ -3259,7 +3324,7 @@ class Translation(DirtyFieldsMixin, models.Model):
         source = self.entity.string
 
         if self.entity.resource.format == Resource.Format.FTL:
-            return as_simple_translation(source)
+            return get_simple_preview(source)
 
         return source
 
@@ -3268,7 +3333,7 @@ class Translation(DirtyFieldsMixin, models.Model):
         target = self.string
 
         if self.entity.resource.format == Resource.Format.FTL:
-            return as_simple_translation(target)
+            return get_simple_preview(target)
 
         return target
 
@@ -3333,7 +3398,7 @@ class Translation(DirtyFieldsMixin, models.Model):
         # changed in the appropriate locale. We could be smarter about
         # this but for now this is fine.
         if self.approved:
-            self.entity.mark_changed(self.locale)
+            self.mark_changed()
 
         if project.slug == "terminology":
             self.entity.reset_term_translation(self.locale)
@@ -3416,7 +3481,7 @@ class Translation(DirtyFieldsMixin, models.Model):
                 project=self.entity.resource.project,
             )
 
-        self.entity.mark_changed(self.locale)
+        self.mark_changed()
 
     def unapprove(self, user):
         """
@@ -3428,7 +3493,7 @@ class Translation(DirtyFieldsMixin, models.Model):
         self.save()
 
         TranslationMemoryEntry.objects.filter(translation=self).delete()
-        self.entity.mark_changed(self.locale)
+        self.mark_changed()
 
     def reject(self, user):
         """
@@ -3438,7 +3503,7 @@ class Translation(DirtyFieldsMixin, models.Model):
         # We must do this before rejecting it.
         if self.approved or self.pretranslated or self.fuzzy:
             TranslationMemoryEntry.objects.filter(translation=self).delete()
-            self.entity.mark_changed(self.locale)
+            self.mark_changed()
 
         self.rejected = True
         self.rejected_user = user
@@ -3470,6 +3535,18 @@ class Translation(DirtyFieldsMixin, models.Model):
             "errors": [error.message for error in self.errors.all()],
             "warnings": [warning.message for warning in self.warnings.all()],
         }
+
+    def mark_changed(self):
+        """
+        Mark the given locale as having changed translations since the
+        last sync.
+        """
+        if self.entity.resource.project.data_source == Project.DataSource.DATABASE:
+            return
+
+        ChangedEntityLocale.objects.get_or_create(
+            entity=self.entity, locale=self.locale
+        )
 
 
 class TranslationMemoryEntryQuerySet(models.QuerySet):

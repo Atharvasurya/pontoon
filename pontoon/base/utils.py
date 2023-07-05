@@ -16,7 +16,9 @@ from guardian.decorators import permission_required as guardian_permission_requi
 from urllib.parse import urljoin
 from xml.sax.saxutils import escape, quoteattr
 
-from django.db.models import Prefetch
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.db.models import Prefetch, Q
 from django.db.models.query import QuerySet
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404
@@ -186,25 +188,13 @@ def _download_file(prefixes, dirnames, vcs_project, relative_path):
             return temp.name
 
 
-def _get_relative_path_from_part(slug, part):
-    """Check if part is a Resource path or Subpage name."""
-    # Avoid circular import; someday we should refactor to avoid.
-    from pontoon.base.models import Subpage
-
-    try:
-        subpage = Subpage.objects.get(project__slug=slug, name=part)
-        return subpage.resources.first().path
-    except Subpage.DoesNotExist:
-        return part
-
-
 def get_download_content(slug, code, part):
     """
     Get content of the file to be downloaded.
 
     :arg str slug: Project slug.
     :arg str code: Locale code.
-    :arg str part: Resource path or Subpage name.
+    :arg str part: Resource path.
     """
     # Avoid circular import; someday we should refactor to avoid.
     from pontoon.sync import formats
@@ -227,10 +217,7 @@ def get_download_content(slug, code, part):
 
     # Download a single file if project has 1 or >= 10 resources
     else:
-        relative_path = _get_relative_path_from_part(slug, part)
-        resources = [
-            get_object_or_404(Resource, project__slug=slug, path=relative_path)
-        ]
+        resources = [get_object_or_404(Resource, project__slug=slug, path=part)]
 
     locale_prefixes = project.repositories
 
@@ -258,7 +245,7 @@ def get_download_content(slug, code, part):
 
         # Get source file if needed
         source_path = None
-        if resource.is_asymmetric:
+        if resource.is_asymmetric or resource.format == "xliff":
             dirnames = VCSProject.SOURCE_DIR_NAMES
             source_path = _download_file(
                 source_prefixes, dirnames, vcs_project, resource.path
@@ -289,8 +276,8 @@ def get_download_content(slug, code, part):
 
         for e in entities_qs:
             entities_dict[e.key] = e.translation_set.filter(
-                approved=True, locale=locale
-            )
+                Q(approved=True) | Q(pretranslated=True)
+            ).filter(locale=locale)
 
         for vcs_translation in resource_file.translations:
             key = vcs_translation.key
@@ -329,7 +316,7 @@ def handle_upload_content(slug, code, part, f, user):
 
     :arg str slug: Project slug.
     :arg str code: Locale code.
-    :arg str part: Resource path or Subpage name.
+    :arg str part: Resource path.
     :arg UploadedFile f: UploadedFile instance.
     :arg User user: User uploading the file.
     """
@@ -338,7 +325,6 @@ def handle_upload_content(slug, code, part, f, user):
     from pontoon.sync.changeset import ChangeSet
     from pontoon.sync.vcs.models import VCSProject
     from pontoon.base.models import (
-        ChangedEntityLocale,
         Entity,
         Locale,
         Project,
@@ -347,10 +333,9 @@ def handle_upload_content(slug, code, part, f, user):
         Translation,
     )
 
-    relative_path = _get_relative_path_from_part(slug, part)
     project = get_object_or_404(Project, slug=slug)
     locale = get_object_or_404(Locale, code=code)
-    resource = get_object_or_404(Resource, project__slug=slug, path=relative_path)
+    resource = get_object_or_404(Resource, project__slug=slug, path=part)
 
     # Store uploaded file to a temporary file and parse it
     extension = os.path.splitext(f.name)[1]
@@ -369,7 +354,7 @@ def handle_upload_content(slug, code, part, f, user):
     )
     entities_qs = (
         Entity.objects.filter(
-            resource__project=project, resource__path=relative_path, obsolete=False
+            resource__project=project, resource__path=part, obsolete=False
         )
         .prefetch_related(
             Prefetch(
@@ -427,17 +412,9 @@ def handle_upload_content(slug, code, part, f, user):
     TranslatedResource.objects.get(resource=resource, locale=locale).calculate_stats()
 
     # Mark translations as changed
-    changed_entities = {}
-    existing = ChangedEntityLocale.objects.values_list("entity", "locale").distinct()
-    for t in changeset.changed_translations:
-        key = (t.entity.pk, t.locale.pk)
-        # Remove duplicate changes to prevent unique constraint violation
-        if key not in existing:
-            changed_entities[key] = ChangedEntityLocale(
-                entity=t.entity, locale=t.locale
-            )
-
-    ChangedEntityLocale.objects.bulk_create(changed_entities.values())
+    changed_translations_pks = [t.pk for t in changeset.changed_translations]
+    changed_translations = Translation.objects.filter(pk__in=changed_translations_pks)
+    changed_translations.bulk_mark_changed()
 
     # Update latest translation
     if changeset.translations_to_create:
@@ -621,3 +598,11 @@ def get_search_phrases(search):
         search_list = ['"']
 
     return search_list
+
+
+def is_email(email):
+    try:
+        validate_email(email)
+        return True
+    except ValidationError:
+        return False

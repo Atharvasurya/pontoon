@@ -9,13 +9,11 @@ import React, {
 import { EntityView, useActiveTranslation } from '~/context/EntityView';
 import { Location } from '~/context/Location';
 import { UnsavedActions } from '~/context/UnsavedChanges';
-import { Editor } from '~/core/editor/components/Editor';
-import { TERM } from '~/core/term';
-import { get as getTerms } from '~/core/term/actions';
-import { USER } from '~/core/user';
-import { getOptimizedContent } from '~/core/utils';
+import { Editor } from '~/modules/editor/components/Editor';
+import { TERM } from '~/modules/terms';
+import { get as getTerms } from '~/modules/terms/actions';
+import { USER } from '~/modules/user';
 import { useAppDispatch, useAppSelector, useAppStore } from '~/hooks';
-import { useReadonlyEditor } from '~/hooks/useReadonlyEditor';
 import { History } from '~/modules/history/components/History';
 import { OTHERLOCALES } from '~/modules/otherlocales';
 import { get as getOtherLocales } from '~/modules/otherlocales/actions';
@@ -25,6 +23,7 @@ import {
   request as requestTeamComments,
   togglePinnedStatus as togglePinnedTeamCommentStatus,
 } from '~/modules/teamcomments/actions';
+import { getPlainMessage } from '~/utils/message';
 
 import './EntityDetails.css';
 import { EntityNavigation } from './EntityNavigation';
@@ -37,7 +36,6 @@ import { Metadata } from './Metadata';
  * Shows the metadata of the entity and an editor for translations.
  */
 export function EntityDetails(): React.ReactElement<'section'> | null {
-  const isReadOnlyEditor = useReadonlyEditor();
   const location = useContext(Location);
   const otherlocales = useAppSelector((state) => state[OTHERLOCALES]);
   const teamComments = useAppSelector((state) => state[TEAM_COMMENTS]);
@@ -60,12 +58,8 @@ export function EntityDetails(): React.ReactElement<'section'> | null {
   const { entity, locale: lc, project } = location;
 
   useEffect(() => {
-    if (!selectedEntity) {
-      return;
-    }
-
     const { format, machinery_original, pk } = selectedEntity;
-    const source = getOptimizedContent(machinery_original, format);
+    const source = getPlainMessage(machinery_original, format);
 
     if (source !== terms.sourceString && project !== 'terminology') {
       dispatch(getTerms(source, lc));
@@ -92,13 +86,13 @@ export function EntityDetails(): React.ReactElement<'section'> | null {
     [dispatch],
   );
 
-  return (
+  // No content while loading entity data
+  return selectedEntity.pk === 0 ? null : (
     <section className='entity-details'>
       <section className='main-column'>
         <EntityNavigation />
         <Metadata
           entity={selectedEntity}
-          isReadOnlyEditor={isReadOnlyEditor}
           terms={terms}
           navigateToPath={navigateToPath}
           teamComments={teamComments}
@@ -113,7 +107,6 @@ export function EntityDetails(): React.ReactElement<'section'> | null {
       <section className='third-column'>
         <Helpers
           entity={selectedEntity}
-          isReadOnlyEditor={isReadOnlyEditor}
           otherlocales={otherlocales}
           teamComments={teamComments}
           terms={terms}
